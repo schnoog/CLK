@@ -8,7 +8,7 @@ on:
       - "!**" # Do NOT trigger on tags (releases will be created manually or by another process)
 
 jobs:
-  build:
+  build-appimage:
     name: Build AppImage
     runs-on: ubuntu-24.04 # Use the latest Ubuntu runner
 
