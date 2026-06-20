@@ -2,12 +2,15 @@ name: Build CLK Linux AppImage
 
 on:
   push:
-    branches: [ master, main ]
-
+    branches:
+      - "**" # Trigger on push to any branch
+    tags:
+      - "!**" # Do NOT trigger on tags (releases will be created manually or by another process)
 
 jobs:
-  build-appimage:
-    runs-on: ubuntu-24.04
+  build:
+    name: Build AppImage
+    runs-on: ubuntu-24.04 # Use the latest Ubuntu runner
 
     steps:
       - name: Checkout code
