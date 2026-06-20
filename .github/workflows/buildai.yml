@@ -1,0 +1,88 @@
+name: Build Linux AppImage
+
+on:
+  push:
+    branches: [ master, main ]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  build-appimage:
+    runs-on: ubuntu-24.04
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install build dependencies
+        run: |
+          sudo apt-get update
+
+          sudo apt-get install -y \
+            scons \
+            build-essential \
+            zlib1g-dev \
+            libsdl2-dev \
+            libgl1-mesa-dev \
+            mesa-common-dev \
+            libglu1-mesa-dev \
+            patchelf \
+            wget \
+            file
+
+      - name: Build CLK
+        run: |
+          cd OSBindings/SDL
+          scons -j$(nproc)
+
+      - name: Create AppDir
+        run: |
+          mkdir -p AppDir/usr/bin
+          mkdir -p AppDir/usr/share/applications
+          mkdir -p AppDir/usr/share/icons/hicolor/256x256/apps
+
+          cp OSBindings/SDL/clksignal AppDir/usr/bin/
+
+          cat > AppDir/CLK.desktop <<'EOF'
+          [Desktop Entry]
+          Type=Application
+          Name=CLK
+          Exec=clksignal
+          Icon=clk
+          Categories=Game;Emulator;
+          Terminal=false
+          EOF
+
+          cp AppDir/CLK.desktop AppDir/usr/share/applications/
+
+          # Use repository icon if available
+          if [ -f OSBindings/Linux/clk.png ]; then
+            cp OSBindings/Linux/clk.png \
+              AppDir/usr/share/icons/hicolor/256x256/apps/clk.png
+          else
+            convert -size 256x256 xc:black \
+              AppDir/usr/share/icons/hicolor/256x256/apps/clk.png || true
+          fi
+
+      - name: Download linuxdeploy
+        run: |
+          wget -q \
+            https://github.com/linuxdeploy/linuxdeploy/releases/download/continuous/linuxdeploy-x86_64.AppImage
+
+          chmod +x linuxdeploy-x86_64.AppImage
+
+      - name: Build AppImage
+        env:
+          ARCH: x86_64
+        run: |
+          ./linuxdeploy-x86_64.AppImage \
+            --appdir AppDir \
+            --desktop-file AppDir/CLK.desktop \
+            --icon-file AppDir/usr/share/icons/hicolor/256x256/apps/clk.png \
+            --output appimage
+
+      - name: Upload AppImage
+        uses: actions/upload-artifact@v4
+        with:
+          name: CLK-AppImage
+          path: "*.AppImage"
