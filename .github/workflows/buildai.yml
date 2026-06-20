@@ -41,7 +41,7 @@ jobs:
           # Extract the version number
           VERSION=$(grep VERSION CMakeLists.txt | grep -v FATA | cut -d " " -f 2)
           if [ -z "$VERSION" ]; then
-            echo "::error::Could not find Calibre version in README.md. Ensure it has a line like 'Calibre: X.Y.Z'"
+            echo "::error::Could not find CLK version in CMakeLists.txt. "
             exit 1
           fi
           echo "CLK version found: $VERSION"
@@ -116,10 +116,12 @@ jobs:
           CLK_VERSION=${{ steps.get_version.outputs.CLK_VERSION }}
           APPIMAGE_NAME="CLK-$CLK_VERSION-x86_64.AppImage"
           MD5_NAME="$APPIMAGE_NAME.md5"
-
+          # List files in the current directory to confirm names
+          echo "Files before renaming"
+          ls -lah
           echo "Renaming AppImage to $APPIMAGE_NAME"
           # The default output name from appimagetool is usually AppDirName-architecture.AppImage
-          mv *-x86_64.AppImage "$APPIMAGE_NAME"
+          mv CLK-x86_64.AppImage "$APPIMAGE_NAME"
 
           echo "Creating MD5 checksum file $MD5_NAME"
           # Create the MD5 checksum
