@@ -1,24 +1,26 @@
-name: Build Linux AppImage
+name: Build Clk AppImage Release
 
 on:
   push:
-    branches: [ master, main ]
-  pull_request:
-  workflow_dispatch:
+    branches:
+      - "**" # Trigger on push to any branch
+    tags:
+      - "!**" # Do NOT trigger on tags (releases will be created manually or by another process)
 
 jobs:
-  build-appimage:
-    runs-on: ubuntu-24.04
+  build:
+    name: Build AppImage
+    runs-on: ubuntu-24.04 # Use the latest Ubuntu runner
 
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
+      - name: Checkout code
+        uses: actions/checkout@v4 # Use the latest version of the checkout action
 
-      - name: Install build dependencies
+      - name: Install dependencies
         run: |
+          # Install fuse and libfuse2 required for AppImage
           sudo apt-get update
-
-          sudo apt-get install -y \
+          sudo apt-get install -y fuse libfuse2 \
             scons \
             build-essential \
             zlib1g-dev \
@@ -29,12 +31,32 @@ jobs:
             patchelf \
             wget \
             file \
+            cmake \
+            gcc-10 \
+            qt6-base-dev \
+            qt6-multimedia-dev \
             imagemagick
+
+
+      - name: Get CLK version from README
+        id: get_version # Assign an ID to this step to access its outputs
+        run: |
+          # Extract the version number
+          VERSION=$(grep VERSION CMakeLists.txt | grep -v FATA | cut -d " " -f 2)
+          if [ -z "$VERSION" ]; then
+            echo "::error::Could not find Calibre version in README.md. Ensure it has a line like 'Calibre: X.Y.Z'"
+            exit 1
+          fi
+          echo "CLK version found: $VERSION"
+          # Set the version as a step output
+          echo "CLK_VERSION=$VERSION" >> $GITHUB_OUTPUT
+
 
       - name: Build CLK
         run: |
-          cd OSBindings/SDL
-          scons -j$(nproc)
+          cmake -S. -Bbuild -DCLK_UI=Qt -DCMAKE_BUILD_TYPE=Release
+          cmake --build build
+
 
       - name: Create AppDir
         run: |
@@ -42,7 +64,7 @@ jobs:
           mkdir -p AppDir/usr/share/applications
           mkdir -p AppDir/usr/share/icons/hicolor/256x256/apps
 
-          cp OSBindings/SDL/clksignal AppDir/usr/bin/
+          cp build/clksignal AppDir/usr/bin/
 
           cat > AppDir/CLK.desktop <<'EOF'
           [Desktop Entry]
@@ -53,37 +75,81 @@ jobs:
           Categories=Game;Emulator;
           Terminal=false
           EOF
-
+          
+          chmod +x AppDir/CLK.desktop
           cp AppDir/CLK.desktop AppDir/usr/share/applications/
 
           # Use repository icon if available
-          if [ -f OSBindings/Linux/clk.png ]; then
-            cp OSBindings/Linux/clk.png \
+          if [ -f READMEImages/Icon.png ]; then
+            cp READMEImages/Icon.png \
               AppDir/usr/share/icons/hicolor/256x256/apps/clk.png
           else
             convert -size 256x256 xc:black \
               AppDir/usr/share/icons/hicolor/256x256/apps/clk.png || true
           fi
 
-      - name: Download linuxdeploy
+
+          # List contents of the AppDir for verification
+          echo "Contents of build/calibre.AppDir:"
+          ls -lah AppDir/
+          echo "Contents of build/calibre.AppDir/usr/bin:"
+          ls -lah AppDir/usr/bin/
+
+
+      - name: Get appimagetool
         run: |
-          wget -q \
-            https://github.com/linuxdeploy/linuxdeploy/releases/download/continuous/linuxdeploy-x86_64.AppImage
+          set -x # Print commands as they are executed for debugging
+          # Download the latest appimagetool
+          wget https://github.com/AppImage/appimagetool/releases/download/continuous/appimagetool-x86_64.AppImage
+          # Make it executable
+          chmod +x appimagetool-x86_64.AppImage
 
-          chmod +x linuxdeploy-x86_64.AppImage
+      - name: Make AppImage
+        run: |
+          set -x # Print commands as they are executed for debugging
+          # Run appimagetool on the created AppDir
+          ./appimagetool-x86_64.AppImage AppDir/
 
-      - name: Build AppImage
+     - name: List files and rename AppImage
+        id: rename_appimage # Assign an ID to access outputs
+        run: |
+          set -x # Print commands as they are executed for debugging
+          # Get the Calibre version again (or use the output from get_version step)
+          CLK_VERSION=${{ steps.get_version.outputs.CLK_VERSION }}
+          APPIMAGE_NAME="CLK-$CLK_VERSION-x86_64.AppImage"
+          MD5_NAME="$APPIMAGE_NAME.md5"
+
+          echo "Renaming AppImage to $APPIMAGE_NAME"
+          # The default output name from appimagetool is usually AppDirName-architecture.AppImage
+          mv *-x86_64.AppImage "$APPIMAGE_NAME"
+
+          echo "Creating MD5 checksum file $MD5_NAME"
+          # Create the MD5 checksum
+          md5sum "$APPIMAGE_NAME" > "$MD5_NAME"
+
+          # List files in the current directory to confirm names
+          ls -lah
+
+          # Set the artifact names as step outputs
+          echo "APPIMAGE_NAME=$APPIMAGE_NAME" >> $GITHUB_OUTPUT
+          echo "MD5_NAME=$MD5_NAME" >> $GITHUB_OUTPUT
+
+
+
+      - name: Create GitHub Release and Upload Assets
+        id: create_release 
+        uses: softprops/action-gh-release@v2
         env:
-          ARCH: x86_64
-        run: |
-          ./linuxdeploy-x86_64.AppImage \
-            --appdir AppDir \
-            --desktop-file AppDir/CLK.desktop \
-            --icon-file AppDir/usr/share/icons/hicolor/256x256/apps/clk.png \
-            --output appimage
-
-      - name: Upload AppImage
-        uses: actions/upload-artifact@v4
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
-          name: CLK-AppImage
-          path: "*.AppImage"
+          tag_name: v${{ steps.get_version.outputs.CLK_VERSION }}
+          name: CLK AppImage v${{ steps.get_version.outputs.CLK_VERSION }}
+          body: |
+            Automated build of CLK AppImage version ${{ steps.get_version.outputs.CLK_VERSION }}.
+
+            **Note:** This is an unofficial build.
+          draft: false
+          prerelease: false
+          files: | 
+            ${{ steps.rename_appimage.outputs.APPIMAGE_NAME }}
+            ${{ steps.rename_appimage.outputs.MD5_NAME }}
