@@ -1,12 +1,9 @@
 name: Build CLK Linux AppImage
-
 on:
   push:
     branches:
-      - "**" # Trigger on push to any branch
-    tags:
-      - "!**" # Do NOT trigger on tags (releases will be created manually or by another process)
-
+      - '**'
+      
 jobs:
   build:
     name: Build AppImage
@@ -110,7 +107,7 @@ jobs:
           # Run appimagetool on the created AppDir
           ./appimagetool-x86_64.AppImage AppDir/
 
-     - name: List files and rename AppImage
+      - name: List files and rename AppImage
         id: rename_appimage # Assign an ID to access outputs
         run: |
           set -x # Print commands as they are executed for debugging
