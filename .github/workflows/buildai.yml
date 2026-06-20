@@ -3,8 +3,7 @@ name: Build CLK Linux AppImage
 on:
   push:
     branches: [ master, main ]
-  pull_request:
-  workflow_dispatch:
+
 
 jobs:
   build-appimage:
