@@ -80,16 +80,17 @@ jobs:
           if [ -f READMEImages/Icon.png ]; then
             cp READMEImages/Icon.png \
               AppDir/usr/share/icons/hicolor/256x256/apps/clk.png
+            cp READMEImages/Icon.png AppDir/clk.png
           else
             convert -size 256x256 xc:black \
-              AppDir/usr/share/icons/hicolor/256x256/apps/clk.png || true
+              AppDir/clk.png || true
           fi
 
 
           # List contents of the AppDir for verification
-          echo "Contents of build/calibre.AppDir:"
+          echo "Contents of AppDir:"
           ls -lah AppDir/
-          echo "Contents of build/calibre.AppDir/usr/bin:"
+          echo "Contents of AppDir/usr/bin:"
           ls -lah AppDir/usr/bin/
 
 
